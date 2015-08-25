@@ -22,18 +22,20 @@
     https://github.com/hahndorf/
 #>
 
-[CmdletBinding()] 
+[CmdletBinding(DefaultParameterSetName="list")]  
 param(
   [parameter(Mandatory=$true,ParameterSetName="public")]
   [parameter(Mandatory=$true,ParameterSetName="domain")]
   [parameter(Mandatory=$true,ParameterSetName="private")]
-  [string]$NetworkName,
+  [string]$Name,
   [parameter(Mandatory=$true,ParameterSetName="public")]
   [switch]$public,
   [parameter(Mandatory=$true,ParameterSetName="private")]
   [switch]$private,
   [parameter(Mandatory=$true,ParameterSetName="domain")]
-  [switch]$domain
+  [switch]$domain,
+  [parameter(Mandatory=$false,ParameterSetName="list")]
+  [switch]$list
   )
 
 [int]$newCategory = -1
@@ -96,11 +98,37 @@ Function Check-ProfileName([string]$term)
     return $name
 }
 
-$ProfileName = Find-ProfileName -term $NetworkName
+Function List()
+{
+    if ($CurrentBuild -lt 9600)
+    {
+        Get-ChildItem "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\NetworkList\Profiles" | foreach {
+
+            $CurrentKey = Get-ItemProperty -Path $_.PsPath
+            Write-Host "Name            : $($CurrentKey.ProfileName)"
+            Write-Host "NetworkCategory : $($types[[int]$CurrentKey.Category])`r`n"
+        }
+    }
+    else
+    {
+        Get-NetConnectionProfile
+    }
+    
+    Write-Host "Specify -Name and a category to change a profile"
+
+    exit 0
+}
+
+if ($newCategory -eq -1)
+{
+    List
+}
+
+$ProfileName = Find-ProfileName -term $Name
 
 If ($ProfileName -eq "")
 {
-    Write-Warning "Network `'$NetworkName`' not found"
+    Write-Warning "Network `'$Name`' not found"
 }
 
 if ($CurrentBuild -lt 9600)
