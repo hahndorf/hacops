@@ -9,3 +9,8 @@ Nothing fancy here.
 
  In 'Network and Sharing Center' your networks are shown as 'Public', "Private' or 'Domain'
     You can change that with this script in all supported versions of Windows
+    
+### New-DemoFtpSite.ps1
+
+Shows how to set up IIS with a FTP site that uses IIS Manager Users
+and a special account to run the FTP service.
