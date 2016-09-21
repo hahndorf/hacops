@@ -1,9 +1,13 @@
 # HacoPs
-Hahndorf's awesome collection of PowerShell scripts 
+Hahndorf's awesome collection of PowerShell scripts. 
 
-Just a collection of a bunch of random PowerShell scripts I wrote over time.
+Just a a bunch of random PowerShell scripts I wrote over time.
 
 Nothing fancy here.
+
+### Update-LECertificate.ps1
+
+Meta script which uses some other PowerShell scripts and modules to update all Let's Encrypt certificates on a Windows Server.
 
 ### Set-NetworkProfileCategory.ps1
 
