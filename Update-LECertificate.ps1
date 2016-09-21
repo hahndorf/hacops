@@ -3,13 +3,33 @@ param(
     [Parameter(Mandatory=$true,Position=0,ParameterSetName = "all")]
     [switch]$all,
     [ValidateSet("\LocalMachine\My","\LocalMachine\WebHosting")]
+    [Parameter(Mandatory=$false,Position=0,ParameterSetName = "all")]
     [string]$certStore = "\LocalMachine\My",
+    [Parameter(Mandatory=$false,Position=0,ParameterSetName = "all")]
     [int]$Days = 20,
+    [Parameter(Mandatory=$false,Position=0,ParameterSetName = "all")]
     [int]$MaxNumberOfCerts = 100,
-    [string]$theIssuer = "Let's Encrypt Authority"
+    [Parameter(Mandatory=$false,Position=0,ParameterSetName = "all")]
+    [string]$theIssuer = "Let's Encrypt Authority",
+    [Parameter(Mandatory=$true,Position=0,ParameterSetName = "schedule")]
+    [switch]$schedule,
+    [Parameter(Mandatory=$false,Position=0,ParameterSetName = "schedule")]
+    [string]$User = $($env:UserDomain + "\" + $env:UserName),
+    [Parameter(Mandatory=$false,Position=0,ParameterSetName = "schedule")]
+    [string]$TaskTime = "3:30",
+    [Parameter(Mandatory=$false,Position=0,ParameterSetName = "schedule")]
+    [string]$TaskDay = "Sunday",
+    [Parameter(Mandatory=$false,Position=0,ParameterSetName = "schedule")]
+    [string]$TaskPath = "\",
+    [Parameter(Mandatory=$false,Position=0,ParameterSetName = "schedule")]
+    [string]$TaskName = ""
 )
 
 Begin{
+
+    #Requires -Version 3.0
+    #Requires -RunAsAdministrator
+    #Requires -Modules WebAdministration,ACMESharp
 
     Import-Module WebAdministration
     . ".\update-certificate-http.ps1"
@@ -29,7 +49,6 @@ Begin{
 
     Function UpdateAll()
     {
-
         $thresholdDate = (Get-Date).AddDays($Days)
 
         Write-Output "Looking for certificates issues by `'$theIssuer`' expiring before: $($thresholdDate.ToString("dd MMMM yyyy"))"
@@ -60,6 +79,57 @@ Begin{
             }
         }        
     }
+
+    Function Schedule-Me()
+    {
+        if ($TaskPath -notmatch "^\\")
+        {
+            Write-Warning "TaskPath has to start with a backslash."
+            Exit 407
+        }
+        if ($TaskPath -notmatch "\\$")
+        {
+            Write-Warning "TaskPath has to end with a backslash."
+            Exit 407
+        }
+
+        # get the script file currently executing
+        $me = Get-Item -Path  $PSCommandPath
+
+        # use the name if not already set
+        if ($TaskName -eq "")
+        {
+            $TaskName = $me.BaseName
+        }
+
+        if ((get-scheduledtask -TaskName $TaskName -TaskPath $TaskPath -ErrorAction SilentlyContinue) -ne $null)
+        {
+            Write-Warning "The task `'$TaskPath$TaskName`' already exists."
+            Exit 408
+        }
+
+        # working directory should be the same as the script
+        $ScriptDir = $me.Directory
+        # add the required parameter
+        $scriptName = $me.Name + " -all"
+
+        # get the password for the user
+        
+        $ph = Read-Host "Please enter the password for: $User" -AsSecureString
+        $password = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
+        [Runtime.InteropServices.Marshal]::SecureStringToBSTR($ph))
+
+        $action = New-ScheduledTaskAction -Execute "%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" `
+        -Argument "-NoProfile -Command `"& {$ScriptDir\$ScriptName; exit `$LastExitCode}`"" -WorkingDirectory "$ScriptDir"
+        
+        $trigger = New-ScheduledTaskTrigger -Weekly -At "$TaskTime" -DaysOfWeek "$TaskDay"
+        $settings = New-ScheduledTaskSettingsSet -Hidden -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -DisallowDemandStart
+
+        if ($pscmdlet.ShouldProcess($scriptName, "Register-ScheduledTask $TaskName")){
+            Register-ScheduledTask -TaskName "$TaskName" -TaskPath "$TaskPath" -Trigger $trigger `
+                -Action $action -Settings $settings -User "$User" -RunLevel Highest -Password "$password"
+        }
+    }
 }
 
 Process 
@@ -67,6 +137,11 @@ Process
     if ($all)
     {
         UpdateAll
+    }
+
+    if ($schedule)
+    {
+        Schedule-Me
     }
 }
 
@@ -86,6 +161,18 @@ Process
     Max number of certs to update. Set to 1 to update just one at a time.
 .PARAMETER theIssuer
     String in the issuer field of the certificate.
+.PARAMETER schedule
+    Indicates to schedule this script in Windows task scheduler
+.PARAMETER User
+    The user name to run the task, defaults to the current user
+.PARAMETER TaskTime
+    The time to start the task
+.PARAMETER TaskDay
+    The weekday to run the task
+.PARAMETER TaskPath
+    The path within task scheduler, needs to start and end with a backslash
+.PARAMETER TaskName
+    The name of the task, defaults to the name of the script
 .EXAMPLE
     Update-LECertificate.ps1 -all
     Updates all certificates that expire in the next 20 days
@@ -95,6 +182,12 @@ Process
 .EXAMPLE
     Update-LECertificate.ps1 -all -whatif
     Shows all bindings that would be updated with a new certificate
+.EXAMPLE
+    Update-LECertificate.ps1 -schedule
+    Schedules the script to run every Sunday morning at 3:30 am, using the current user
+.EXAMPLE
+    Update-LECertificate.ps1 -schedule -user joe -TaskName "UpdateCerts" -TaskPath "/adminStuff/" -TaskDay "Monday" -TaskTime "15:20"
+    Schedules the script to run every Monday at 3:20 p.m., using user joe with the full name: adminStuff/UpdateCerts
 .NOTES
     Tested on Windows Server 2012 R2
     Author:  Peter Hahndorf
