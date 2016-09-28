@@ -1,4 +1,5 @@
 [CmdletBinding(SupportsShouldProcess=$true)]
+[cmdletbinding(DefaultParameterSetName='all')]
 param(
     [Parameter(Mandatory=$true,Position=0,ParameterSetName = "all")]
     [switch]$all,
