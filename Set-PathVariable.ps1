@@ -8,75 +8,15 @@ Begin
 
 #requires –runasadministrator
 
-$code = @"
-using System;
-using System.Runtime.InteropServices;
-using System.Text;
-
-namespace Win32Api
-{
-    public class RawRegistry
-    {
-        [DllImport("advapi32", CharSet = CharSet.Auto)]
-        public static extern int RegOpenKeyEx(UIntPtr hKey, string lpstrSubKey, UInt32 nReserved, UInt32 samDesired, ref UIntPtr phResult);
-
-        [DllImport("advapi32", CharSet = CharSet.Auto)]
-        public static extern int RegCloseKey(UIntPtr hKey);
-
-        [DllImport("advapi32", CharSet = CharSet.Auto, EntryPoint = "RegQueryValueEx")]
-        public static extern int RegQueryStringValueEx(UIntPtr hKey, string lpstrValueName, UIntPtr nReserved, ref UInt32 pValueType, string lpstrValueBuf, ref Int32 pValueBufSize);
-
-        public static string GetUnExpandedValue(string keyName,string valueName)
-        {
-            UIntPtr HKLM = (UIntPtr)0x80000002;
-            uint REG_KEY_READ = 0x00020019;
-
-            UIntPtr xKey = (UIntPtr)0;
-            int ret = RegOpenKeyEx(HKLM, keyName, 0, REG_KEY_READ, ref xKey);
-            if (ret == 0)
-            {
-                UInt32 nValueType = 0;
-                string stringValue = "";
-                Int32 bufferSize = 0;
-
-                // find out how the required size for the output buffer
-                ret = RegQueryStringValueEx(xKey, valueName, (UIntPtr)0, ref nValueType, stringValue, ref bufferSize);
-
-                // allocate output buffer
-                StringBuilder buffer = new StringBuilder(bufferSize);
-                buffer.Append((char)0, bufferSize);
-                stringValue = buffer.ToString();
-
-                // retrieve the unexpanded string value
-                ret = RegQueryStringValueEx(xKey, valueName, (UIntPtr)0, ref nValueType, stringValue, ref bufferSize);
-                ret = RegCloseKey(xKey);
-
-                return stringValue;
-            }
-            else
-            {
-                throw new System.IO.IOException("Registry value not found, return value was: " + ret.ToString());
-            }
-        }        
-    }
-}
-"@
+    $regPath = "SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
+    $hklm = [Microsoft.Win32.Registry]::LocalMachine
 
     Function GetOldPath()
-    {
-        Add-Type -TypeDefinition $code
-        $myReg = New-Object Win32Api.RawRegistry
-
-        # Path variable location in the registry
-        [string]$keyName = "SYSTEM\CurrentControlSet\Control\Session Manager\Environment";
-        [string]$valueName = "Path";
-
-        $theValue = [Win32Api.RawRegistry]::GetUnExpandedValue($keyName,$valueName)
-
-        # filled up with NULL characters at the end, remove them
-        Return ($theValue -replace "\x00+$","");
+    {     
+        $regKey = $hklm.OpenSubKey($regPath, $FALSE)
+        $envpath = $regKey.GetValue("Path", "", [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+        return $envPath
     }
-
 }
 
 Process
@@ -94,16 +34,14 @@ Process
     }
    
     [string]$oldPath = GetOldPath
-    $pattern = ";" + $NewLocation.Replace("\","\\") + ";"
-    $RxInput = ";" + $oldPath + ";"
-
     Write-Verbose "Old Path: $oldPath"
 
     # check whether the new location is already in the path
-    if (";$oldPath;" -match $pattern)
+    $parts = $oldPath.split(";")
+    If ($parts -contains $NewLocation)
     {
-        Write-Warning "New location is already in the path"
-        Exit $ERROR_DUP_NAME
+        Write-Warning "The new location is already in the path"
+        Exit $ERROR_DUP_NAME        
     }
 
     # build the new path, make sure we don't have double semicolons
@@ -114,12 +52,10 @@ Process
         # add to the current session
         $env:path += ";$NewLocation"
         # save into registry
-        [Environment]::SetEnvironmentVariable("Path", "$newPath", "Machine")
-
+        $regKey = $hklm.OpenSubKey($regPath, $True)
+        $regKey.SetValue("Path", $newPath, [Microsoft.Win32.RegistryValueKind]::ExpandString)
         Write-Output "The operation completed successfully."
     }
-
-    # http://stackoverflow.com/questions/23813478/set-nested-expandable-environment-variable-with-powershell
 
     Exit $ERROR_SUCCESS        
 }
