@@ -1,12 +1,13 @@
 [CmdletBinding(SupportsShouldProcess=$true)]
 [cmdletbinding(DefaultParameterSetName='all')]
 param(
+    [Alias("all")]
     [Parameter(Mandatory=$true,Position=0,ParameterSetName = "all")]
-    [switch]$all,
+    [switch]$UpdateAll,
     [Parameter(Mandatory=$true,Position=0,ParameterSetName = "cleanup")]
-    [switch]$cleanup,
+    [switch]$Cleanup,
     [Parameter(Mandatory=$true,Position=0,ParameterSetName = "schedule")]
-    [switch]$schedule,
+    [switch]$Schedule,
     [ValidateSet("\LocalMachine\My","\LocalMachine\WebHosting")]
     [Parameter(Mandatory=$false,ParameterSetName = "all")]
     [Parameter(Mandatory=$false,ParameterSetName = "cleanup")]
@@ -47,7 +48,7 @@ Begin{
 
             # create a unique alias
             [string]$alias = $domain -replace "\.",""
-            $alias += (Get-Date).ToString("yyyyMMddhhmmss")    
+            $alias += (Get-Date).ToString("yyyyMMddhhmmss")
             Update-Certificate-Http -alias $alias -domain "$domain" -websiteName "$site" -certPath $certStore
         }
     }
@@ -65,8 +66,8 @@ Begin{
             if ($_.Host -ne "")
             {             
                 # get the name from the xPath, we could do a match regex instead, but this works
-                $siteName = (Get-WebBinding -Protocol https -Port 443 -HostHeader $_.Host).ItemXPath      
-                $siteName  = $siteName -replace "\/system.applicationHost\/sites\/site\[@name='",""     
+                $siteName = (Get-WebBinding -Protocol https -Port 443 -HostHeader $_.Host).ItemXPath
+                $siteName  = $siteName -replace "\/system.applicationHost\/sites\/site\[@name='",""
                 $siteName  = $siteName -replace "' and @id='\d+']",""
 
                 # get the certificate for the binding
@@ -77,12 +78,12 @@ Begin{
                     [DateTime]$expires = $cert.notAfter
 
                     if ($expires -lt $thresholdDate)
-                    {                
+                    {
                         Update-Cert -domain "$($_.Host)" -site "$siteName"
-                    }   
-                }      
+                    }
+                }
             }
-        }        
+        }
     }
 
     Function CleanUp-Cert()
@@ -118,7 +119,7 @@ Begin{
                                 }
                             }
                         }
-                    }                                
+                    }
             }
         }
     }
@@ -177,9 +178,9 @@ Begin{
 
 Process 
 {
-    if ($all)     {UpdateAll}
-    if ($schedule){Schedule-Me}
-    if ($cleanup) {CleanUp-Cert}
+    if ($Cleanup) {CleanUp-Cert}
+    if ($UpdateAll){UpdateAll}
+    if ($Schedule){Schedule-Me}
 }
 
 <#
@@ -188,9 +189,9 @@ Process
 .DESCRIPTION
     Loops through all IIS SSL bindings to find certificates issued by Lets Encrypt that
     expire soon and tries to update them.
-.PARAMETER all
+.PARAMETER UpdateAll
     Specifies that all matching certificates should be updated.
-.PARAMETER cleanup
+.PARAMETER Cleanup
     Removes all Let's Encrypt certificates that are no longer used in IIS and for each
     another certificate for the same hostname and a later expired date exists.
 .PARAMETER certStore
@@ -201,7 +202,7 @@ Process
     Max number of certs to review. Set to 1 to update just one at a time. This include certificate that do not qualify.
 .PARAMETER theIssuer
     String in the issuer field of the certificate.
-.PARAMETER schedule
+.PARAMETER Schedule
     Indicates to schedule this script in Windows task scheduler
 .PARAMETER User
     The user name to run the task, defaults to the current user
@@ -214,13 +215,13 @@ Process
 .PARAMETER TaskName
     The name of the task, defaults to the name of the script
 .EXAMPLE
-    Update-LECertificate.ps1 -all
+    Update-LECertificate.ps1 -UpdateAll
     Updates all certificates that expire in the next 20 days
 .EXAMPLE
-    Update-LECertificate.ps1 -all -days 50
+    Update-LECertificate.ps1 -UpdateAll -days 50
     Updates all certificates that expire in the next 50 days
 .EXAMPLE
-    Update-LECertificate.ps1 -all -whatif
+    Update-LECertificate.ps1 -UpdateAll -whatif
     Shows all bindings that would be updated with a new certificate
 .EXAMPLE
     Update-LECertificate.ps1 -schedule
@@ -229,8 +230,11 @@ Process
     Update-LECertificate.ps1 -schedule -user joe -TaskName "UpdateCerts" -TaskPath "/adminStuff/" -TaskDay "Monday" -TaskTime "15:20"
     Schedules the script to run every Monday at 3:20 p.m., using user joe with the full name: adminStuff/UpdateCerts
 .EXAMPLE
-    Update-LECertificate.ps1 -cleanup -whatif
+    Update-LECertificate.ps1 -Cleanup -whatif
     Shows all certificates that would be removed when not using -whatif
+.EXAMPLE
+    Update-LECertificate.ps1 -UpdateAll -Cleanup
+    First runs a clean up operation and then tries to update expiring certficates
 .NOTES
     Tested on Windows Server 2012 R2
     Author:  Peter Hahndorf
