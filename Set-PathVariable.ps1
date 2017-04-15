@@ -46,9 +46,9 @@ Process
 
     # build the new path, make sure we don't have double semicolons
     $newPath = $oldPath + ";" + $NewLocation
-    $newPath = $newPath -replace ";;",""
+    $newPath = $newPath -replace ";;",";"
 
-    if ($pscmdlet.ShouldProcess("%Path%", "Add $NewLocation")){
+    if ($pscmdlet.ShouldProcess("%Path%", "Set $newPath")){
         # add to the current session
         $env:path += ";$NewLocation"
         # save into registry
@@ -75,6 +75,6 @@ Process
     Author:  Peter Hahndorf
     Created: October 7th, 2016   
 .LINK
-    https://peter.hahndorf.eu
     https://github.com/hahndorf/hacops
+    https://peter.hahndorf.eu/blog/AddingToPathVariable
 #>
