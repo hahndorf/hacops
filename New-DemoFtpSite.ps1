@@ -68,11 +68,13 @@ Begin
 
         $Assembly = Add-Type -AssemblyName System.Web
         # generate a ramdom password
-        # 14 chars is max for net user, fix?
-        $password = [System.Web.Security.Membership]::GeneratePassword(14,2)
+        # 14 chars is max for net user, fix, use /Y now we can use more than 14
+        $password = [System.Web.Security.Membership]::GeneratePassword(24,2)
 
         # create a user, should only be in guests, that's enough
-        & net user $FTPIdenityName $password /ADD /ACTIVE:YES /FULLNAME:"FTP Service Account" /EXPIRES:NEVER /Comment:"Account for running FTP Service COM+ application" /PASSWORDCHG:NO
+        & net user $FTPIdenityName initialPassword12354 /ADD /Y /ACTIVE:YES /FULLNAME:"FTP Service Account" /EXPIRES:NEVER /Comment:"Account for running FTP Service COM+ application" /PASSWORDCHG:NO
+        # set the new password, even if the user already exists.
+        & net user $FTPIdenityName $password /Y
         # in my tests the password never expired for this user, but better to check
         & net localgroup guests $FTPIdenityName /ADD 
         & net localgroup users $FTPIdenityName /DELETE 
@@ -145,7 +147,7 @@ Process
 {
     if ($PrepareServer)
     {
-    #    SetupFeatures
+        SetupFeatures
         ConfigureServer
     }
 
@@ -174,7 +176,7 @@ Process
     New-DemoFtpSite.ps1 -siteName TestFTPSite -siteRoot "C:\ftproot" -SiteAccess "Modify"
     Creates a new FTP site and allows IIS Manager users 
 .EXAMPLE       
-    New-DemoFtpSite.ps1 -siteName TestFTPSite -user "susan" -userpassword "*******" -userAccess "Read"
+    New-DemoFtpSite.ps1 -siteName TestFTPSite -username "susan" -userpassword "*******" -userAccess "Read"
     Adds a IIS manager user and allows access to the ftp site.
 .NOTES
     Tested on Windows Server 2012 R2
