@@ -38,7 +38,7 @@ Begin
         else
         {
             # ask the user for the password
-           $ph = Read-Host "Please enter your OKC password for `'$($script:okc_password)`'" -AsSecureString
+           $ph = Read-Host "Please enter your OKC password for `'$($username)`'" -AsSecureString
            $script:okc_password = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($ph)) 
         }
         
@@ -52,7 +52,7 @@ Begin
     # the username for the site
     [string]$script:okc_user = $username;
     # variable for the user, leave this empty here
-    [string]$script:okc_password = "2793104c12350dda1eb36aacf2d75ba6";
+    [string]$script:okc_password = "";
     # the url of okc, keep this
     [string]$script:okc_url = "https://www.okcupid.com";
 
