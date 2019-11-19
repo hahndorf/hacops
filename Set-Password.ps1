@@ -18,7 +18,7 @@
     Created: August 22nd, 2015 
     
 .LINK
-    https://github.com/hahndorf/Hacops
+    https://github.com/hahndorf/Set-Privacy   
 #>
 param (
     [string]$userName = $($env:userName),
@@ -134,13 +134,17 @@ if ($newPassword -eq "")
     $newPassword2 = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
     [Runtime.InteropServices.Marshal]::SecureStringToBSTR($sNew2))
 
-    if ($sNew1 -ne $sNew2)
+    if ($newPassword1 -ne $newPassword2)
     {
         Write-Warning "The new password don't match"
         exit 
     }
+    else
+    {
+        $newPassword = $newPassword1
+    }
+    
 }
-
 
 $MethodDefinition = @"
 [DllImport("netapi32.dll", CharSet=CharSet.Unicode, CallingConvention=CallingConvention.StdCall,
