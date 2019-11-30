@@ -1,7 +1,8 @@
 ﻿[CmdletBinding(SupportsShouldProcess=$true)]
 param(
     [parameter(Mandatory=$true)]
-    [string]$NewLocation)
+    [string]$NewLocation
+)
 
 Begin
 {
@@ -41,7 +42,7 @@ Process
     If ($parts -contains $NewLocation)
     {
         Write-Warning "The new location is already in the path"
-        Exit $ERROR_DUP_NAME        
+        Exit $ERROR_DUP_NAME
     }
 
     # build the new path, make sure we don't have double semicolons
@@ -50,14 +51,20 @@ Process
 
     if ($pscmdlet.ShouldProcess("%Path%", "Set $newPath")){
         # add to the current session
-        $env:path += ";$NewLocation"
+        if ($env:path.EndsWith(";"))
+        {
+            $env:path += "$NewLocation"
+        }
+        else {
+            $env:path += ";$NewLocation"
+        }
         # save into registry
         $regKey = $hklm.OpenSubKey($regPath, $True)
         $regKey.SetValue("Path", $newPath, [Microsoft.Win32.RegistryValueKind]::ExpandString)
         Write-Output "The operation completed successfully."
     }
 
-    Exit $ERROR_SUCCESS        
+    Exit $ERROR_SUCCESS
 }
 
 <#
