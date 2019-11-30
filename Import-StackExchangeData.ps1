@@ -6,12 +6,16 @@ param(
     [string]$Source,
     [parameter(Mandatory=$true,ParameterSetName="Setup")]
     [switch]$Setup,
-    [string]$ConnectionString = "Server=.;Database=lab;Integrated Security=True;"
+    [parameter(Mandatory=$true,ParameterSetName="Process")]
+    [switch]$Process,    
+    [string]$ConnectionString = "Server=.;Database=StackExchange;Integrated Security=True;"
 )
+
+
 
 Begin{
 
-# Script to import Stack Exchange Questions and answers into a SQL-Server database
+# 
 # using the files from the Stack Exchange GDPR Export zip 
 # not done yet
 
@@ -32,9 +36,9 @@ INSERT INTO stack.PostImport
  ipAddress nvarchar(50),  text nvarchar(max)) AS post
 "@
 
-$setupSQL = @"
+$setupSchema = "CREATE SCHEMA [stack] AUTHORIZATION [dbo]"
 
-CREATE SCHEMA [stack] AUTHORIZATION [dbo];
+$setupSQL = @"
 
 CREATE TABLE [stack].[Questions](
 	[Id] [int] IDENTITY(1,1) NOT NULL,
@@ -56,10 +60,21 @@ CREATE TABLE [stack].[Questions](
 	[IpAddress] [nvarchar](50) NULL,
 	[TheText] [nvarchar](max) NULL,
  CONSTRAINT [PK_PostImport] PRIMARY KEY CLUSTERED  ([Id] ASC));
+ 
+CREATE TABLE [stack].Answers(
+	[Id] [int] IDENTITY(1,1) NOT NULL,
+	[Site] [varchar](100) NOT NULL,
+	[PostId] [int] NOT NULL,
+	[CreationDate] [datetime] NOT NULL,
+	[Body] [nvarchar](max) NULL,
+ CONSTRAINT [PK_Answers] PRIMARY KEY CLUSTERED ([Id] ASC));
 
 "@
 
 $processSQL = @"
+
+TRUNCATE TABLE stack.Questions;
+TRUNCATE TABLE stack.Answers;
 
 INSERT INTO stack.Questions
            ([Site]
@@ -98,7 +113,68 @@ HAVING posttype = 'Edit Body' ) As l
 ON l.LastEdit = i.CreationDate AND l.[Site] = i.[Site] AND l.posttype = i.posttype AND l.PostID = i.PostId
 ) s
 INNER JOIN stack.questions q
- ON s.Site = q.Site AND s.PostId = q.PostId  
+ ON s.Site = q.Site AND s.PostId = q.PostId; 
+
+ -- Update Body with latest title edit
+ UPDATE q SET Title = s.TheText
+ FROM 
+(
+SELECT i.TheText, i.[Site], i.PostId FROM stack.PostImport i
+INNER JOIN
+( SELECT MAX(CreationDate) As LastEdit, [Site], posttype, PostID 
+FROM stack.PostImport 
+GROUP BY [Site], posttype, PostID
+HAVING posttype = 'Edit Title' ) As l
+ON l.LastEdit = i.CreationDate AND l.[Site] = i.[Site] AND l.posttype = i.posttype AND l.PostID = i.PostId
+) s
+INNER JOIN stack.questions q
+ON s.Site = q.Site AND s.PostId = q.PostId;
+
+-- Update Body with latest tags edit
+UPDATE q SET Tags = s.TheText
+FROM 
+(
+SELECT i.TheText, i.[Site], i.PostId FROM stack.PostImport i
+INNER JOIN
+( SELECT MAX(CreationDate) As LastEdit, [Site], posttype, PostID 
+FROM stack.PostImport 
+GROUP BY [Site], posttype, PostID
+HAVING posttype = 'Edit Tags' ) As l
+ON l.LastEdit = i.CreationDate AND l.[Site] = i.[Site] AND l.posttype = i.posttype AND l.PostID = i.PostId
+) s
+INNER JOIN stack.questions q
+ON s.Site = q.Site AND s.PostId = q.PostId;
+
+-- insert answers
+INSERT INTO stack.Answers
+           ([Site]
+           ,[PostId]
+           ,[CreationDate]
+           ,[Body])
+
+SELECT [Site],PostId,[CreationDate],TheText
+  FROM stack.PostImport a
+  WHERE a.PostType = 'Initial Body' AND a.id NOT IN
+(
+SELECT i.Id
+  FROM stack.PostImport i
+  INNER JOIN stack.Questions q
+  ON i.[site] = q.[Site] AND i.PostId = q.PostId);
+
+  -- Update answer Body with latest body edit
+  UPDATE a SET Body = s.TheText
+  FROM 
+(
+SELECT i.TheText, i.[Site], i.PostId FROM stack.PostImport i
+INNER JOIN
+( SELECT MAX(CreationDate) As LastEdit, [Site], posttype, PostID 
+FROM stack.PostImport 
+GROUP BY [Site], posttype, PostID
+HAVING posttype = 'Edit Body' ) As l
+ON l.LastEdit = i.CreationDate AND l.[Site] = i.[Site] AND l.posttype = i.posttype AND l.PostID = i.PostId
+) s
+INNER JOIN stack.answers a
+ ON s.Site = a.Site AND s.PostId = a.PostId; 
 
 "@
 
@@ -143,6 +219,12 @@ INNER JOIN stack.questions q
 
         $qaDir = Join-Path $Source -ChildPath "qa"
 
+        if (!(Test-Path -Path $qaDir))
+        {
+            Write-Warning "`'$qaDir`' does not exist"
+            exit 404
+        }
+
         $files = Get-ChildItem -path "$qaDir" -Directory | Where-Object Name -ne "Global"
         [int]$siteCount = 1;
         
@@ -178,6 +260,61 @@ Process
     }
     if ($Setup)
     {
-        RunSQL -sql $sql "$setupSQL"
-    }    
+        RunSQL -sql "$setupSchema"
+        RunSQL -sql "$setupSQL"
+        Write-Output "Schema and tables created"
+    }
+    if ($Process)
+    {
+        RunSQL -sql "$processSQL"
+        Write-Output "Import data copied to stack.questions and stack.answers tables"
+    }
 }
+
+<#
+.SYNOPSIS
+   Script to import Stack Exchange Questions and answers into a SQL-Server database
+
+.DESCRIPTION
+   After you downloaded all your Stack Exchange data via their GDPR Export feature
+   unzip the file and perform three steps:
+
+   Run this script on the SQL-Server itself and change the connection string parameter
+   to an existing database. To use the default, manually create a database named StackExchange
+
+   Then run -setup to create the tables needed to import the data.
+
+   Run -import -source with the root of the unzip files to import the data into the stack.PostImport table
+
+   Run -process to copy the imported data into the stack.questions and stack.answers tables
+
+   Now you have the data in two tables and can use it.
+
+   Currently you have your answers but you don't know the questions they answer.
+
+   Importing and processing again will first delete all existing data, so to make permanent changes copy the data somewhere else.
+      
+.EXAMPLE
+   Import-StackExchangeData.ps1 -setup
+
+   Create the tables in the database specified in the -connectionstring
+
+.EXAMPLE
+   Import-StackExchangeData.ps1 -import -source "$env:UserProfile\desktop\GDPR-P20191127-123"
+
+   Imports the questions and answers from all sites
+
+.EXAMPLE
+   Import-StackExchangeData.ps1 -process
+
+   Copies the data into separate tables.
+
+.NOTES
+    Tested with SQL-Server 2017
+    Author:  Peter Hahndorf
+    Created: November 30th, 2019
+.LINK
+    https://peter.hahndorf.eu
+    https://github.com/hahndorf/hacops
+
+#>
