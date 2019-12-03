@@ -34,3 +34,7 @@ Changes Windows Server 2016 Full Installation to behave more like Server Core In
 ## Import-StackExchangeData.ps1
 
 Imports Stack Exchange questions and answers from GDPR export into a SQL-Server database.
+
+## Get-SysMonStats.ps1
+
+Showing stats for Sysinternals Sysmon data <a href="https://peter.hahndorf.eu/blog/Some-stats-based-on-the-Sysint.html">Blog post</a>
