@@ -3,8 +3,21 @@ param
 (
     [parameter(Mandatory=$true)]
     [string]$CollectionExportFile,
-    [string]$TargetPath = "E:\news\http"
+    [parameter(Mandatory=$true)]
+    [string]$TargetPath
 )
+
+if (-not(Test-Path -Path "$CollectionExportFile"))
+{
+    Write-Warning "`'CollectionExportFile`' does not exist"
+    Exit 4041
+}
+
+if (-not(Test-Path -Path "$TargetPath"))
+{
+    Write-Warning "`'TargetPath`' does not exist"
+    Exit 4042
+}
 
 $data = Get-Content -Path $CollectionExportFile -Raw | ConvertFrom-Json
 
@@ -47,6 +60,31 @@ $data.item | ForEach-Object {
 
     $content | Set-content -Path $fileName -Encoding UTF8
 
-    Write-host $fileName -ForegroundColor DarkCyan
-    $content
+ #   Write-host $fileName -ForegroundColor DarkCyan
+ #   $content
 }
+
+<# 
+   .SYNOPSIS
+   Takes and Export from a Postman collection and creates RFC 2616 http files
+   
+   .DESCRIPTION
+
+   .PARAMETER -CollectionExportFile
+    The path to the file to convert
+   
+   .PARAMETER -TargetPath
+    The directory to save the new http files to.
+
+   .EXAMPLE
+   ConvertFrom-PostmanCollection.ps1 -CollectionExportFile C:\postman-collection-export.json -TargetPath $($env:USERPROFILE)\httpFiles
+  
+.NOTES
+    Very early version
+    Author:  Peter Hahndorf
+    Created: August 28th, 2023
+.LINK
+    https://hahndorf.eu
+    https://github.com/hahndorf/hacops
+
+#>
