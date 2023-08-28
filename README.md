@@ -38,3 +38,7 @@ Imports Stack Exchange questions and answers from GDPR export into a SQL-Server 
 ## Get-SysMonStats.ps1
 
 Showing stats for Sysinternals Sysmon data <a href="https://peter.hahndorf.eu/blog/Some-stats-based-on-the-Sysint.html">Blog post</a>
+
+## ConvertFrom-PostmanCollection.ps1
+
+Takes an exported Postman collection Json file and converts the requests to RFC 2616 http files. This can help you during your migration from Postman to tools like VS Code REST Client.
