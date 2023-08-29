@@ -19,24 +19,37 @@ if (-not(Test-Path -Path "$TargetPath"))
     Exit 4042
 }
 
-$data = Get-Content -Path $CollectionExportFile -Raw | ConvertFrom-Json
+Function Save-OneItem($item,[string]$Parent)
+{
 
-$CollectionName = $data.Info.Name
+    $content = "// imported from Postman: $CollectionName"
 
-# $CollectionName 
+    if (-not ([string]::IsNullOrEmpty($Parent)))
+    {
+        $parentPath = Join-Path -Path $CollectionPath -ChildPath $Parent
 
-$data.item | ForEach-Object {
+        $content += " - $Parent"
 
-    # create one file for each item
+        if (-not(Test-Path -Path $parentPath))
+        {
+            New-Item -ItemType Directory -Path $parentPath | Out-Null
+        }
+    }
+    else {
+        $parentPath = $CollectionPath
+    }
 
-    $fileName = $CollectionName + "_" + $_.Name;
+    $fileName =  $item.Name;
+
+    $content += " - $fileName`r`n"
+
     $fileName = $fileName -Replace "\.","_"
     $fileName += ".http"
-    $fileName = Join-Path -Path $TargetPath -ChildPath $fileName
+    $fileName = Join-Path -Path $parentPath -ChildPath $fileName
 
-    $content = "$($_.request.method) $($_.request.url.raw)`r`n"
+    $content += "$($item.request.method) $($item.request.url.raw)`r`n"
 
-    $_.request.header | ForEach-Object {
+    $item.request.header | ForEach-Object {
 
         if ($_.disabled -eq "true")
         {
@@ -46,29 +59,82 @@ $data.item | ForEach-Object {
         $content += $_.key + "=" + $_.value + "`r`n"
     }
 
-    if ($_.request.body -ne $null)
+    if ($item.request.body -ne $null)
     {
-        if ($_.request.body.mode -eq "raw")
+        if ($item.request.body.mode -eq "raw")
         {
-            if ($_.request.body.options.raw.language -eq "json")
+            if ($item.request.body.options.raw.language -eq "json")
             {
                 $content +="content-type: application/json`r`n`r`n"
-                $content += $_.request.body.raw
+                $content += $item.request.body.raw
+            }
+        }
+        elseif ($item.request.body.mode -eq "urlencoded")
+        {
+            $content +="content-type: application/x-www-form-urlencoded`r`n`r`n"
+            [int]$keyCount = 0
+            $item.request.body.urlencoded | ForEach-Object {
+
+                if ($_.disabled -ne "true")
+                {
+                    if ($keyCount -ne 0)
+                    {
+                        $content += "&"
+                    }
+                    
+                    $content += "$($_.key)=$($_.value)`r`n"
+                }
+                $keyCount++
             }
         }
     }
 
-    $content | Set-content -Path $fileName -Encoding UTF8
+   $content | Set-content -Path $fileName -Encoding UTF8
 
- #   Write-host $fileName -ForegroundColor DarkCyan
- #   $content
+    Write-Verbose $fileName
 }
+
+$data = Get-Content -Path $CollectionExportFile -Raw -Encoding UTF8 | ConvertFrom-Json
+
+$CollectionName = $data.Info.Name
+
+$CollectionPath = Join-Path -Path $TargetPath -ChildPath $CollectionName
+
+if (-not(Test-Path -Path $CollectionPath))
+{
+    New-Item -ItemType Directory -Path $CollectionPath | Out-Null
+}
+
+[int]$ItemCount = 0
+
+$data.item | ForEach-Object {
+
+    # create one file for each item
+    
+    if ($_.item -eq $null)
+    {
+        # is single request
+        Save-OneItem -Item $_ -Parent ""
+        $ItemCount++
+    }
+    else {
+        # is container
+        $containerName = $_.Name
+        $_.item | ForEach-Object {
+            Save-OneItem -Item $_ -Parent $containerName
+            $ItemCount++
+        }
+    }
+}
+
+Write-Output "Created $ItemCount files under `'$TargetPath`'"
 
 <# 
    .SYNOPSIS
    Takes and Export from a Postman collection and creates RFC 2616 http files
    
    .DESCRIPTION
+    Very early version, just raw JSON supported, not authentication schemes
 
    .PARAMETER -CollectionExportFile
     The path to the file to convert
@@ -80,7 +146,6 @@ $data.item | ForEach-Object {
    ConvertFrom-PostmanCollection.ps1 -CollectionExportFile C:\postman-collection-export.json -TargetPath $($env:USERPROFILE)\httpFiles
   
 .NOTES
-    Very early version
     Author:  Peter Hahndorf
     Created: August 28th, 2023
 .LINK
