@@ -18,7 +18,7 @@
     Created: August 22nd, 2015 
     
 .LINK
-    https://github.com/hahndorf/Set-Privacy   
+    https://github.com/hahndorf/hacops
 #>
 param (
     [string]$userName = $($env:userName),
@@ -168,4 +168,3 @@ catch [System.Exception]
 {
     Write-Host "Other exception"
 }
-              

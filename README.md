@@ -14,6 +14,7 @@ Meta script which uses some other PowerShell scripts and modules to update all L
  In 'Network and Sharing Center' your networks are shown as 'Public', "Private' or 'Domain'
     You can change that with this script in all supported versions of Windows.
     
+
 ## New-DemoFtpSite.ps1
 
 Shows how to set up IIS with a FTP site that uses IIS Manager Users
@@ -42,3 +43,15 @@ Showing stats for Sysinternals Sysmon data <a href="https://peter.hahndorf.eu/bl
 ## ConvertFrom-PostmanCollection.ps1
 
 Takes an exported Postman collection Json file and converts the requests to RFC 2616 http files. This can help you during your migration from Postman to tools like VS Code REST Client.
+
+## Set-Password.ps1
+
+Changes the password of a local user.
+
+This is different from 
+
+```cmd
+net user username password
+```
+
+that resets the password and potentially destroys data
