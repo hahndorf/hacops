@@ -205,25 +205,37 @@ if (-not(Test-Path -Path $CollectionPath))
 
 [int]$ItemCount = 0
 
-$data.item | ForEach-Object {
 
-    # create one file for each item
-    
-    if ($_.item -eq $null)
-    {
-        # is single request
-        Save-OneItem -Item $_ -Parent ""
-        $ItemCount++
-    }
-    else {
-        # is container
-        $containerName = $_.Name
-
-        $_.item | ForEach-Object {
-            Save-OneItem -Item $_ -Parent $containerName
+Function ProcessItem {
+    param(
+        [Parameter(Mandatory=$true, ValueFromPipeline=$true)]
+        $Item,
+        [Parameter(Mandatory=$false)]
+        $Parent = ""
+    )
+    # Process each item    
+    $Item | ForEach-Object {
+        
+        if ($_.item -eq $null) {
+            # is single request
+            Save-OneItem -Item $_ -Parent $Parent
+            
             $ItemCount++
         }
+        else {
+            # is container
+            $containerName = $_.Name
+            
+            $_.item | ForEach-Object {                
+                ProcessItem -Item $_ -Parent "$parent/$containerName"
+                $ItemCount++
+            }
+        }
     }
+}
+
+$data.item | ForEach-Object {
+    $_ | ProcessItem
 }
 
 # Write into .env File
